@@ -1,4 +1,5 @@
 import { IPC_CHANNELS } from '@shared/ipc-channels'
+import { IdSchema } from '@shared/schemas/common'
 import {
   KontrahentInputSchema,
   KontrahentUpdateSchema,
@@ -20,15 +21,19 @@ export function registerKontrahenciHandlers(): void {
     listKontrahenci(parseOrThrow(ListKontrahenciOptionsSchema, opts))
   )
 
-  handleIpc(IPC_CHANNELS.kontrahenci.get, (id: number) => getKontrahent(id))
+  handleIpc(IPC_CHANNELS.kontrahenci.get, (id: unknown) =>
+    getKontrahent(parseOrThrow(IdSchema, id))
+  )
 
   handleIpc(IPC_CHANNELS.kontrahenci.create, (input: unknown) =>
     createKontrahent(parseOrThrow(KontrahentInputSchema, input))
   )
 
-  handleIpc(IPC_CHANNELS.kontrahenci.update, (id: number, input: unknown) =>
-    updateKontrahent(id, parseOrThrow(KontrahentUpdateSchema, input))
+  handleIpc(IPC_CHANNELS.kontrahenci.update, (id: unknown, input: unknown) =>
+    updateKontrahent(parseOrThrow(IdSchema, id), parseOrThrow(KontrahentUpdateSchema, input))
   )
 
-  handleIpc(IPC_CHANNELS.kontrahenci.deactivate, (id: number) => deactivateKontrahent(id))
+  handleIpc(IPC_CHANNELS.kontrahenci.deactivate, (id: unknown) =>
+    deactivateKontrahent(parseOrThrow(IdSchema, id))
+  )
 }

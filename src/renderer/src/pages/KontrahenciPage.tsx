@@ -1,15 +1,21 @@
 import { useState } from 'react'
 import { useKontrahenci } from '../hooks/useKontrahenci'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import KontrahentForm from '../components/kontrahenci/KontrahentForm'
 import type { Kontrahent } from '@shared/types/kontrahent'
 import { parseIpcError } from '@shared/utils/ipcError'
 
+const SEARCH_DEBOUNCE_MS = 300
+
 function KontrahenciPage(): React.JSX.Element {
   const [search, setSearch] = useState('')
+  const debouncedSearch = useDebouncedValue(search, SEARCH_DEBOUNCE_MS)
   // undefined = formularz zamknięty, null = nowy kontrahent, Kontrahent = edycja
   const [editing, setEditing] = useState<Kontrahent | null | undefined>(undefined)
   const [actionError, setActionError] = useState<string | null>(null)
-  const { kontrahenci, loading, error, refetch } = useKontrahenci({ search: search || undefined })
+  const { kontrahenci, loading, error, refetch } = useKontrahenci({
+    search: debouncedSearch || undefined
+  })
 
   const handleDeactivate = async (id: number): Promise<void> => {
     if (!window.confirm('Dezaktywować tego kontrahenta?')) return
