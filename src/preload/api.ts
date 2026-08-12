@@ -7,6 +7,7 @@ import type {
   NewKontrahentInput,
   UpdateKontrahentInput
 } from '@shared/types/kontrahent'
+import type { Dokument, NewDokumentInput } from '@shared/types/dokument'
 
 export const api = {
   app: {
@@ -23,6 +24,10 @@ export const api = {
       ipcRenderer.invoke(IPC_CHANNELS.kontrahenci.update, id, input),
     deactivate: (id: number): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.kontrahenci.deactivate, id)
+  },
+  dokumenty: {
+    create: (input: NewDokumentInput): Promise<Dokument> =>
+      ipcRenderer.invoke(IPC_CHANNELS.dokumenty.create, input)
   }
 }
 

@@ -8,5 +8,8 @@ export const IPC_CHANNELS = {
     create: 'kontrahenci:create',
     update: 'kontrahenci:update',
     deactivate: 'kontrahenci:deactivate'
+  },
+  dokumenty: {
+    create: 'dokumenty:create'
   }
 } as const

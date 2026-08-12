@@ -1,16 +1,12 @@
 import { z } from 'zod'
-
-// Formularze HTML wysyłają puste pole jako '' — traktujemy to jak brak wartości (null),
-// zanim zajmie się nim właściwa walidacja.
-const emptyToNull = (val: unknown): unknown =>
-  typeof val === 'string' && val.trim() === '' ? null : val
+import { emptyToNull } from './common'
 
 const optionalText = z.preprocess(emptyToNull, z.string().trim().min(1).nullable())
 const optionalEmail = z.preprocess(
   emptyToNull,
   z.string().trim().email('Nieprawidłowy adres e-mail').nullable()
 )
-const optionalNote = z.preprocess(emptyToNull, z.string().nullable())
+const optionalNote = z.preprocess(emptyToNull, z.string().trim().nullable())
 
 export const KontrahentInputSchema = z.object({
   nazwa: z.string().trim().min(1, 'Nazwa jest wymagana'),
