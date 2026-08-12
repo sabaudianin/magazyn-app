@@ -2,6 +2,8 @@ import { app, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { getDb } from './db/connection'
+import { runMigrations } from './db/runner'
 import { registerAllHandlers } from './ipc'
 
 function createWindow(): void {
@@ -50,7 +52,9 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  registerAllHandlers()
+  const db = getDb()
+  runMigrations(db)
+  registerAllHandlers(db)
 
   createWindow()
 
