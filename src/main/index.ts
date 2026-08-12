@@ -52,9 +52,8 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  const db = getDb()
-  runMigrations(db)
-  registerAllHandlers(db)
+  runMigrations(getDb())
+  registerAllHandlers()
 
   createWindow()
 

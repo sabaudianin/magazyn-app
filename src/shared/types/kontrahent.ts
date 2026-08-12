@@ -14,10 +14,7 @@ export interface Kontrahent {
   zaktualizowano: string | null
 }
 
-export type NewKontrahentInput = Omit<
-  Kontrahent,
-  'id' | 'aktywny' | 'utworzono' | 'zaktualizowano'
->
+export type NewKontrahentInput = Omit<Kontrahent, 'id' | 'aktywny' | 'utworzono' | 'zaktualizowano'>
 
 export type UpdateKontrahentInput = Partial<NewKontrahentInput>
 
