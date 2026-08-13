@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
@@ -71,13 +72,23 @@ function KontrahentForm({ initial, onCancel, onSaved }: KontrahentFormProps): Re
     }
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-lg">
         <h3 className="text-lg font-semibold">
           {initial ? 'Edytuj kontrahenta' : 'Dodaj kontrahenta'}
         </h3>
-        <form className="mt-4 grid grid-cols-2 gap-3" onSubmit={handleSubmit(onSubmit)}>
+        <form
+          className="mt-4 grid grid-cols-2 gap-3"
+          onSubmit={(e) => {
+            // KontrahentForm bywa renderowany (przez portal) wewnątrz innego <form> (np. formularza
+            // dokumentu, gdy modal otwierany jest z KontrahentPicker) — React bąbelkuje syntetyczne
+            // eventy przez drzewo komponentów, nie DOM, więc mimo portalu submit doszedłby też do
+            // formularza nadrzędnego bez tego stopPropagation.
+            e.stopPropagation()
+            void handleSubmit(onSubmit)(e)
+          }}
+        >
           <label className={`col-span-2 ${labelClass}`}>
             Nazwa *
             <input className={inputClass} {...register('nazwa')} />
@@ -146,7 +157,8 @@ function KontrahentForm({ initial, onCancel, onSaved }: KontrahentFormProps): Re
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 

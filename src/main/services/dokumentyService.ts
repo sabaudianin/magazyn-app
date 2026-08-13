@@ -3,6 +3,7 @@ import { getDb } from '../db/connection'
 import { AppError } from '../utils/errors'
 import { getKontrahent } from './kontrahenciService'
 import type { Dokument, DokumentTyp, NewDokumentInput } from '@shared/types/dokument'
+import type { Kontrahent } from '@shared/types/kontrahent'
 
 interface DokumentRow {
   id: number
@@ -63,14 +64,19 @@ function stmts(): Statements {
   return statements
 }
 
-function assembleDokument(dokumentId: number): Dokument {
+// nadawca/odbiorca można podać z zewnątrz (createDokument już je pobrał do walidacji
+// istnienia), żeby nie odpytywać o te same rekordy Kontrahenci drugi raz.
+function assembleDokument(
+  dokumentId: number,
+  prefetched?: { nadawca: Kontrahent; odbiorca: Kontrahent }
+): Dokument {
   const row = stmts().getDokumentById.get(dokumentId) as DokumentRow | undefined
   if (!row) {
     throw new AppError('NOT_FOUND', `Dokument o id ${dokumentId} nie istnieje`)
   }
 
-  const nadawca = getKontrahent(row.nadawca_id)
-  const odbiorca = getKontrahent(row.odbiorca_id)
+  const nadawca = prefetched?.nadawca ?? getKontrahent(row.nadawca_id)
+  const odbiorca = prefetched?.odbiorca ?? getKontrahent(row.odbiorca_id)
   if (!nadawca || !odbiorca) {
     throw new AppError('INTERNAL', 'Nie udało się odczytać kontrahentów dokumentu')
   }
@@ -115,10 +121,12 @@ export function createDokument(input: NewDokumentInput): Dokument {
   const db = getDb()
   const rok = extractYear(input.data)
 
-  if (!getKontrahent(input.nadawcaId)) {
+  const nadawca = getKontrahent(input.nadawcaId)
+  if (!nadawca) {
     throw new AppError('NOT_FOUND', `Nadawca o id ${input.nadawcaId} nie istnieje`)
   }
-  if (!getKontrahent(input.odbiorcaId)) {
+  const odbiorca = getKontrahent(input.odbiorcaId)
+  if (!odbiorca) {
     throw new AppError('NOT_FOUND', `Odbiorca o id ${input.odbiorcaId} nie istnieje`)
   }
 
@@ -151,7 +159,7 @@ export function createDokument(input: NewDokumentInput): Dokument {
     return dokumentId
   })
 
-  return assembleDokument(createTx())
+  return assembleDokument(createTx(), { nadawca, odbiorca })
 }
 
 export function getDokument(id: number): Dokument {

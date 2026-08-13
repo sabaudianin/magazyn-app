@@ -3,7 +3,7 @@ import { emptyToNull, IdSchema } from './common'
 
 export const NewPozycjaInputSchema = z.object({
   opis: z.string().trim().min(1, 'Opis jest wymagany'),
-  ilosc: z.number().positive('Ilość musi być większa od zera'),
+  ilosc: z.number({ error: 'Ilość jest wymagana' }).positive('Ilość musi być większa od zera'),
   jednostka: z.string().trim().min(1, 'Jednostka jest wymagana'),
   waga: z.preprocess(emptyToNull, z.number().positive('Waga musi być większa od zera').nullable())
 })
