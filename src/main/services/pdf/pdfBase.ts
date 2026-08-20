@@ -28,7 +28,9 @@ export async function createA4Document(): Promise<PdfContext> {
 // page.drawText's wbudowany maxWidth łamie tekst wizualnie, ale nie mówi ile linii z tego wyszło —
 // bez tego kursor Y po takim wywołaniu przesuwałby się tylko o jedną linię, nachodząc na kolejny
 // blok. Łamiemy tekst sami, żeby dokładnie znać liczbę linii i poprawnie przesunąć kursor.
-function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
+// Eksportowane, bo tej samej logiki (i tego samego PDFFont z fontkit) potrzebuje też wypełnianie
+// szablonu CMR (services/pdf/cmr) — tam nie ma PdfContext, tylko pojedyncza strona załadowanego PDF.
+export function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
   const words = text.split(/\s+/).filter(Boolean)
   if (words.length === 0) return ['']
 
@@ -47,6 +49,35 @@ function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): 
   return lines
 }
 
+export function drawWrappedTextOnPage(
+  page: PDFPage,
+  text: string,
+  x: number,
+  y: number,
+  options: {
+    font: PDFFont
+    size: number
+    maxWidth: number
+    color?: ReturnType<typeof rgb>
+    lineHeight?: number
+  }
+): number {
+  const lines = wrapText(text, options.font, options.size, options.maxWidth)
+  const lineHeight = options.lineHeight ?? LINE_HEIGHT
+  let cursorY = y
+  for (const line of lines) {
+    page.drawText(line, {
+      x,
+      y: cursorY,
+      size: options.size,
+      font: options.font,
+      color: options.color
+    })
+    cursorY -= lineHeight
+  }
+  return cursorY
+}
+
 function drawWrappedText(
   ctx: PdfContext,
   text: string,
@@ -54,19 +85,7 @@ function drawWrappedText(
   y: number,
   options: { font: PDFFont; size: number; maxWidth: number; color?: ReturnType<typeof rgb> }
 ): number {
-  const lines = wrapText(text, options.font, options.size, options.maxWidth)
-  let cursorY = y
-  for (const line of lines) {
-    ctx.page.drawText(line, {
-      x,
-      y: cursorY,
-      size: options.size,
-      font: options.font,
-      color: options.color
-    })
-    cursorY -= LINE_HEIGHT
-  }
-  return cursorY
+  return drawWrappedTextOnPage(ctx.page, text, x, y, options)
 }
 
 export function drawDocumentHeader(
@@ -100,6 +119,12 @@ export function drawDocumentHeader(
   return cursorY - LINE_HEIGHT * 0.5
 }
 
+// Reużywane też przez CMR (services/pdf/cmr/generateCmr.ts), żeby format "kod miejscowość"
+// nie rozjechał się między dwoma niezależnymi implementacjami.
+export function formatAddressLine(kontrahent: Kontrahent): string {
+  return [kontrahent.kodPocztowy, kontrahent.miejscowosc].filter(Boolean).join(' ')
+}
+
 export function drawKontrahentBlock(
   ctx: PdfContext,
   label: string,
@@ -120,7 +145,7 @@ export function drawKontrahentBlock(
     maxWidth: boxWidth
   })
 
-  const addressLine = [kontrahent.kodPocztowy, kontrahent.miejscowosc].filter(Boolean).join(' ')
+  const addressLine = formatAddressLine(kontrahent)
   const lines = [kontrahent.ulica, addressLine || null, kontrahent.kraj].filter(
     (line): line is string => Boolean(line)
   )
