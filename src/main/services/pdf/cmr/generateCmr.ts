@@ -96,11 +96,18 @@ export async function generateCmr(dokument: Dokument): Promise<Buffer> {
         size: CMR_TABLE.fontSize,
         font: fonts.regular
       })
-      drawWrappedTextOnPage(page, pozycja.jednostka, CMR_TABLE.columns.jednostka.x, rowY, {
-        font: fonts.regular,
-        size: CMR_TABLE.fontSize,
-        maxWidth: CMR_TABLE.columns.jednostka.maxWidth
-      })
+      const afterJednostka = drawWrappedTextOnPage(
+        page,
+        pozycja.jednostka,
+        CMR_TABLE.columns.jednostka.x,
+        rowY,
+        {
+          font: fonts.regular,
+          size: CMR_TABLE.fontSize,
+          maxWidth: CMR_TABLE.columns.jednostka.maxWidth,
+          lineHeight: CMR_TABLE.rowHeight
+        }
+      )
       const afterOpis = drawWrappedTextOnPage(page, pozycja.opis, CMR_TABLE.columns.opis.x, rowY, {
         font: fonts.regular,
         size: CMR_TABLE.fontSize,
@@ -115,7 +122,10 @@ export async function generateCmr(dokument: Dokument): Promise<Buffer> {
           font: fonts.regular
         })
       }
-      rowY = Math.min(afterOpis, rowY - CMR_TABLE.rowHeight)
+      // jednostka miała własny domyślny lineHeight (16pt) różny od rowHeight (14pt) używanego
+      // do wyliczania afterOpis, więc jej zawinięty tekst mógł nachodzić na kolejny wiersz —
+      // oba kolumny liczą się teraz tym samym lineHeight i obie wchodzą do min().
+      rowY = Math.min(afterOpis, afterJednostka, rowY - CMR_TABLE.rowHeight)
     }
   }
 
