@@ -1,8 +1,20 @@
 import type Database from 'better-sqlite3'
 import { getDb } from '../db/connection'
-import { AppError } from '../utils/errors'
+import { AppError, toErrorPayload } from '../utils/errors'
+import { logger } from '../utils/logger'
 import { getKontrahent } from './kontrahenciService'
-import type { Dokument, DokumentTyp, NewDokumentInput } from '@shared/types/dokument'
+import { generateKartaPrzyjecia } from './pdf/kartaPrzyjecia'
+import { generateKartaWydania } from './pdf/kartaWydania'
+import { generateCmr, CmrTemplateNotConfiguredError } from './pdf/cmr/generateCmr'
+import { getKartaPdfPath, getCmrPdfPath, savePdfBytes } from './pdf/pdfStorage'
+import { appendPozycjeToExcel } from './excel/magazynExcelService'
+import type {
+  CreateDokumentResult,
+  Dokument,
+  DokumentTyp,
+  NewDokumentInput,
+  SaveWarning
+} from '@shared/types/dokument'
 import type { Kontrahent } from '@shared/types/kontrahent'
 
 interface DokumentRow {
@@ -34,6 +46,8 @@ interface Statements {
   upsertLicznik: Database.Statement
   insertDokument: Database.Statement
   insertPozycja: Database.Statement
+  updatePdfKartaPath: Database.Statement
+  updatePdfCmrPath: Database.Statement
 }
 
 let statements: Statements | null = null
@@ -58,7 +72,9 @@ function stmts(): Statements {
       insertPozycja: db.prepare(
         `INSERT INTO PozycjeDokumentu (dokument_id, lp, opis, ilosc, jednostka, waga)
          VALUES (@dokumentId, @lp, @opis, @ilosc, @jednostka, @waga)`
-      )
+      ),
+      updatePdfKartaPath: db.prepare('UPDATE Dokumenty SET pdf_karta_path = @path WHERE id = @id'),
+      updatePdfCmrPath: db.prepare('UPDATE Dokumenty SET pdf_cmr_path = @path WHERE id = @id')
     }
   }
   return statements
@@ -164,4 +180,88 @@ export function createDokument(input: NewDokumentInput): Dokument {
 
 export function getDokument(id: number): Dokument {
   return assembleDokument(id)
+}
+
+function generateKartaBytes(dokument: Dokument): Promise<Buffer> {
+  return dokument.typ === 'PZ' ? generateKartaPrzyjecia(dokument) : generateKartaWydania(dokument)
+}
+
+// Mutuje przekazany obiekt dokument (pdfKartaPath) zamiast wymuszać ponowny SELECT — wywołujące
+// funkcje (orchestrator, retry) mają już świeży obiekt w ręku.
+async function generateAndSaveKartaPdf(dokument: Dokument): Promise<void> {
+  const bytes = await generateKartaBytes(dokument)
+  const filePath = getKartaPdfPath(dokument)
+  savePdfBytes(filePath, bytes)
+  stmts().updatePdfKartaPath.run({ id: dokument.id, path: filePath })
+  dokument.pdfKartaPath = filePath
+}
+
+async function generateAndSaveCmrPdf(dokument: Dokument): Promise<void> {
+  const bytes = await generateCmr(dokument)
+  const filePath = getCmrPdfPath(dokument)
+  savePdfBytes(filePath, bytes)
+  stmts().updatePdfCmrPath.run({ id: dokument.id, path: filePath })
+  dokument.pdfCmrPath = filePath
+}
+
+// Krok 1 (transakcja DB, createDokument powyżej) jest jedynym krokiem, którego błąd przerywa
+// całość — rzuca i nic dalej się nie wykonuje. Kroki 2-4 (karta PDF, Excel, CMR) są non-fatal:
+// błąd każdego z nich trafia do `warnings`, ale rekord w DB nigdy nie jest z tego powodu cofany.
+// Brak skonfigurowanego szablonu CMR to stan oczekiwany (severity 'info'), nie błąd.
+export async function createDokumentZDokumentami(
+  input: NewDokumentInput
+): Promise<CreateDokumentResult> {
+  const dokument = createDokument(input)
+  const warnings: SaveWarning[] = []
+
+  try {
+    await generateAndSaveKartaPdf(dokument)
+  } catch (error) {
+    logger.error(`[dokumenty] karta PDF nie powiodła się dla ${dokument.numer}`, error)
+    warnings.push({ step: 'pdfKarta', severity: 'error', message: toErrorPayload(error).message })
+  }
+
+  try {
+    await appendPozycjeToExcel(dokument)
+    dokument.excelZapisano = true
+  } catch (error) {
+    logger.error(`[dokumenty] zapis do Excela nie powiódł się dla ${dokument.numer}`, error)
+    warnings.push({ step: 'excel', severity: 'error', message: toErrorPayload(error).message })
+  }
+
+  try {
+    await generateAndSaveCmrPdf(dokument)
+  } catch (error) {
+    if (error instanceof CmrTemplateNotConfiguredError) {
+      warnings.push({ step: 'pdfCmr', severity: 'info', message: error.message })
+    } else {
+      logger.error(`[dokumenty] CMR nie powiódł się dla ${dokument.numer}`, error)
+      warnings.push({ step: 'pdfCmr', severity: 'error', message: toErrorPayload(error).message })
+    }
+  }
+
+  return { dokument, warnings }
+}
+
+// Retry ponawia tylko dany efekt uboczny nad już zapisanym rekordem DB, bez ponownego
+// wprowadzania danych. W odróżnieniu od createDokumentZDokumentami (który zbiera warnings, bo
+// próbuje wszystkich kroków naraz) retry to pojedyncza akcja użytkownika — błąd rzuca dalej jako
+// AppError, tak jak każde inne pojedyncze wywołanie IPC w tej appce.
+export async function retryPdfKarta(id: number): Promise<Dokument> {
+  const dokument = getDokument(id)
+  await generateAndSaveKartaPdf(dokument)
+  return dokument
+}
+
+export async function retryPdfCmr(id: number): Promise<Dokument> {
+  const dokument = getDokument(id)
+  await generateAndSaveCmrPdf(dokument)
+  return dokument
+}
+
+export async function retryExcel(id: number): Promise<Dokument> {
+  const dokument = getDokument(id)
+  await appendPozycjeToExcel(dokument)
+  dokument.excelZapisano = true
+  return dokument
 }

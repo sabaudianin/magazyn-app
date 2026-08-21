@@ -7,7 +7,7 @@ import type {
   NewKontrahentInput,
   UpdateKontrahentInput
 } from '@shared/types/kontrahent'
-import type { Dokument, NewDokumentInput } from '@shared/types/dokument'
+import type { CreateDokumentResult, Dokument, NewDokumentInput } from '@shared/types/dokument'
 
 export const api = {
   app: {
@@ -26,8 +26,14 @@ export const api = {
       ipcRenderer.invoke(IPC_CHANNELS.kontrahenci.deactivate, id)
   },
   dokumenty: {
-    create: (input: NewDokumentInput): Promise<Dokument> =>
-      ipcRenderer.invoke(IPC_CHANNELS.dokumenty.create, input)
+    create: (input: NewDokumentInput): Promise<CreateDokumentResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.dokumenty.create, input),
+    retryPdfKarta: (id: number): Promise<Dokument> =>
+      ipcRenderer.invoke(IPC_CHANNELS.dokumenty.retryPdfKarta, id),
+    retryPdfCmr: (id: number): Promise<Dokument> =>
+      ipcRenderer.invoke(IPC_CHANNELS.dokumenty.retryPdfCmr, id),
+    retryExcel: (id: number): Promise<Dokument> =>
+      ipcRenderer.invoke(IPC_CHANNELS.dokumenty.retryExcel, id)
   }
 }
 

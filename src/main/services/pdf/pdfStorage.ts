@@ -5,10 +5,20 @@ import type { Dokument } from '@shared/types/dokument'
 
 // Rok bierzemy z numeru (TYP/NNN/ROK), a nie ponownie z daty dokumentu — numer już go zawiera,
 // więc unikamy powielania logiki parsowania roku z dokumentyService.
-export function getKartaPdfPath(dokument: Dokument): string {
+function dokumentPdfDir(dokument: Dokument): { dir: string; safeNumer: string } {
   const rok = dokument.numer.split('/')[2]
   const safeNumer = dokument.numer.replace(/\//g, '_')
-  return join(app.getPath('userData'), 'dokumenty', dokument.typ, rok, `${safeNumer}.pdf`)
+  return { dir: join(app.getPath('userData'), 'dokumenty', dokument.typ, rok), safeNumer }
+}
+
+export function getKartaPdfPath(dokument: Dokument): string {
+  const { dir, safeNumer } = dokumentPdfDir(dokument)
+  return join(dir, `${safeNumer}.pdf`)
+}
+
+export function getCmrPdfPath(dokument: Dokument): string {
+  const { dir, safeNumer } = dokumentPdfDir(dokument)
+  return join(dir, `${safeNumer}_cmr.pdf`)
 }
 
 export function savePdfBytes(filePath: string, bytes: Uint8Array): void {

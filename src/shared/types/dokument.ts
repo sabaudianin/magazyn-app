@@ -37,3 +37,17 @@ export interface Dokument {
   excelZapisano: boolean
   utworzono: string
 }
+
+// step odpowiada efektowi ubocznemu zapisu dokumentu (karta PDF / CMR PDF / Excel), który się nie
+// powiódł. severity 'info' oznacza stan oczekiwany (np. szablon CMR jeszcze nieskonfigurowany),
+// nie błąd — UI nie powinien go pokazywać jako alarmujący ani oferować przycisku "Ponów".
+export interface SaveWarning {
+  step: 'pdfKarta' | 'pdfCmr' | 'excel'
+  severity: 'error' | 'info'
+  message: string
+}
+
+export interface CreateDokumentResult {
+  dokument: Dokument
+  warnings: SaveWarning[]
+}

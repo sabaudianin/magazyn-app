@@ -10,6 +10,9 @@ export const IPC_CHANNELS = {
     deactivate: 'kontrahenci:deactivate'
   },
   dokumenty: {
-    create: 'dokumenty:create'
+    create: 'dokumenty:create',
+    retryPdfKarta: 'dokumenty:retryPdfKarta',
+    retryPdfCmr: 'dokumenty:retryPdfCmr',
+    retryExcel: 'dokumenty:retryExcel'
   }
 } as const

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import KontrahentPicker from '../components/kontrahenci/KontrahentPicker'
@@ -9,7 +9,7 @@ import type {
   DokumentFormValues
 } from '../components/dokumenty/dokumentFormSchema'
 import type { Kontrahent } from '@shared/types/kontrahent'
-import type { Dokument } from '@shared/types/dokument'
+import type { Dokument, SaveWarning } from '@shared/types/dokument'
 import { parseIpcError } from '@shared/utils/ipcError'
 
 function todayIso(): string {
@@ -32,6 +32,9 @@ function NowyDokumentPage(): React.JSX.Element {
   }>({})
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [savedDokument, setSavedDokument] = useState<Dokument | null>(null)
+  const [warnings, setWarnings] = useState<SaveWarning[]>([])
+  const [retryingStep, setRetryingStep] = useState<SaveWarning['step'] | null>(null)
+  const retryLockRef = useRef(false)
 
   const {
     register,
@@ -52,6 +55,7 @@ function NowyDokumentPage(): React.JSX.Element {
   const onSubmit = async (values: DokumentFormOutput): Promise<void> => {
     setSubmitError(null)
     setSavedDokument(null)
+    setWarnings([])
 
     const nastepnyBlad: { nadawca?: string; odbiorca?: string } = {}
     if (!nadawca) nastepnyBlad.nadawca = 'Wybierz nadawcę'
@@ -60,12 +64,13 @@ function NowyDokumentPage(): React.JSX.Element {
     if (!nadawca || !odbiorca) return
 
     try {
-      const dokument = await window.api.dokumenty.create({
+      const result = await window.api.dokumenty.create({
         ...values,
         nadawcaId: nadawca.id,
         odbiorcaId: odbiorca.id
       })
-      setSavedDokument(dokument)
+      setSavedDokument(result.dokument)
+      setWarnings(result.warnings)
       reset({
         typ: values.typ,
         data: todayIso(),
@@ -80,6 +85,46 @@ function NowyDokumentPage(): React.JSX.Element {
     }
   }
 
+  // retryLockRef blokuje WSZYSTKIE przyciski "Ponów" (nie tylko klikany), dopóki trwa jedna próba.
+  // Ref, nie tylko stan retryingStep (który steruje samym disabled na przycisku) — retryExcel
+  // dopisuje wiersze do magazyn.xlsx bez deduplikacji, więc podwójne kliknięcie zduplikowałoby
+  // pozycje w arkuszu, a stan Reacta commituje się dopiero po re-renderze; ref blokuje natychmiast,
+  // synchronicznie, zanim do tego dojdzie. Blokada obejmuje też różne kroki naraz — dwie równoległe
+  // próby mogłyby się nadpisać nawzajem w setSavedDokument (każda ma swój snapshot sprzed retry).
+  const handleRetry = async (step: SaveWarning['step']): Promise<void> => {
+    if (!savedDokument || retryLockRef.current) return
+    const retry =
+      step === 'pdfKarta'
+        ? window.api.dokumenty.retryPdfKarta
+        : step === 'pdfCmr'
+          ? window.api.dokumenty.retryPdfCmr
+          : window.api.dokumenty.retryExcel
+    retryLockRef.current = true
+    setRetryingStep(step)
+    try {
+      const updated = await retry(savedDokument.id)
+      setSavedDokument(updated)
+      setWarnings((prev) => prev.filter((w) => w.step !== step))
+    } catch (err) {
+      const parsed = parseIpcError(err)
+      // Brak skonfigurowanego szablonu CMR to stan oczekiwany, nie błąd (patrz SaveWarning
+      // w shared/types/dokument.ts) — nawet gdy wykryty dopiero przy ponowieniu, nie powinien
+      // trafić do alarmującego submitError, tylko wrócić na listę jako informacyjny.
+      if (parsed.code === 'CMR_TEMPLATE_NOT_CONFIGURED') {
+        setWarnings((prev) =>
+          prev.map((w) =>
+            w.step === step ? { ...w, severity: 'info', message: parsed.message } : w
+          )
+        )
+      } else {
+        setSubmitError(parsed.message)
+      }
+    } finally {
+      retryLockRef.current = false
+      setRetryingStep(null)
+    }
+  }
+
   return (
     <div>
       <h2 className="text-xl font-semibold">Nowy dokument</h2>
@@ -87,6 +132,32 @@ function NowyDokumentPage(): React.JSX.Element {
       {savedDokument && (
         <div className="mt-4 rounded border border-green-200 bg-green-50 p-3 text-sm text-green-800">
           Zapisano dokument <strong>{savedDokument.numer}</strong>.
+        </div>
+      )}
+      {warnings.length > 0 && (
+        <div className="mt-2 space-y-2">
+          {warnings.map((w) => (
+            <div
+              key={w.step}
+              className={`flex items-center justify-between rounded border p-3 text-sm ${
+                w.severity === 'error'
+                  ? 'border-amber-200 bg-amber-50 text-amber-800'
+                  : 'border-slate-200 bg-slate-50 text-slate-600'
+              }`}
+            >
+              <span>{w.message}</span>
+              {w.severity === 'error' && (
+                <button
+                  type="button"
+                  disabled={retryingStep !== null}
+                  onClick={() => void handleRetry(w.step)}
+                  className="ml-3 shrink-0 rounded bg-white px-2 py-1 text-xs font-medium text-amber-800 ring-1 ring-amber-300 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {retryingStep === w.step ? 'Ponawiam…' : 'Ponów'}
+                </button>
+              )}
+            </div>
+          ))}
         </div>
       )}
       {submitError && (
