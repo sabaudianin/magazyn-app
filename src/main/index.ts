@@ -38,6 +38,18 @@ function createWindow(): void {
   }
 }
 
+// Pod WSL2 (środowisko deweloperskie tego projektu) proces GPU Chromium regularnie nie startuje
+// poprawnie i się zapętla w crashach — WSLg przechwytuje każdy z nich jako pełny zrzut pamięci do
+// %TEMP%\wsl-crashes, który potrafi urosnąć do dziesiątek/setek GB i zapchać dysk C:. Appka nie
+// potrzebuje akceleracji GPU (formularze/tabele), więc wyłączamy ją w dev na Linuksie — cel
+// produkcyjny (Windows) tego nie dotyczy. Musi być wywołane przed app.whenReady().
+if (!app.isPackaged && process.platform === 'linux') {
+  app.disableHardwareAcceleration()
+  app.commandLine.appendSwitch('disable-gpu')
+  app.commandLine.appendSwitch('disable-software-rasterizer')
+  app.commandLine.appendSwitch('disable-gpu-compositing')
+}
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
