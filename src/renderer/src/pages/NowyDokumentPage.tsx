@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import KontrahentPicker from '../components/kontrahenci/KontrahentPicker'
@@ -35,6 +35,15 @@ function NowyDokumentPage(): React.JSX.Element {
   const [warnings, setWarnings] = useState<SaveWarning[]>([])
   const [retryingStep, setRetryingStep] = useState<SaveWarning['step'] | null>(null)
   const retryLockRef = useRef(false)
+  // Id dokumentu aktualnie wyświetlanego w bannerze sukcesu — jeśli w trakcie retry użytkownik
+  // zdąży zapisać KOLEJNY dokument (nowy onSubmit), wynik starego retry nie może nadpisać nowo
+  // wyświetlonego dokumentu. Synchronizowane efektem (nie ustawiane wprost w onSubmit) — refy
+  // czyta/pisze się poza renderem, a react-hooks/refs nie pozwala przekazać do handleSubmit()
+  // funkcji, która sama dotyka refa.
+  const currentDokIdRef = useRef<number | null>(null)
+  useEffect(() => {
+    currentDokIdRef.current = savedDokument?.id ?? null
+  }, [savedDokument])
 
   const {
     register,
@@ -93,6 +102,7 @@ function NowyDokumentPage(): React.JSX.Element {
   // próby mogłyby się nadpisać nawzajem w setSavedDokument (każda ma swój snapshot sprzed retry).
   const handleRetry = async (step: SaveWarning['step']): Promise<void> => {
     if (!savedDokument || retryLockRef.current) return
+    const targetId = savedDokument.id
     const retry =
       step === 'pdfKarta'
         ? window.api.dokumenty.retryPdfKarta
@@ -102,10 +112,14 @@ function NowyDokumentPage(): React.JSX.Element {
     retryLockRef.current = true
     setRetryingStep(step)
     try {
-      const updated = await retry(savedDokument.id)
+      const updated = await retry(targetId)
+      // Użytkownik mógł w międzyczasie zapisać kolejny dokument — wynik tego retry dotyczy już
+      // nieaktualnego dokumentu i nie powinien nadpisać tego, co jest teraz na ekranie.
+      if (currentDokIdRef.current !== targetId) return
       setSavedDokument(updated)
       setWarnings((prev) => prev.filter((w) => w.step !== step))
     } catch (err) {
+      if (currentDokIdRef.current !== targetId) return
       const parsed = parseIpcError(err)
       // Brak skonfigurowanego szablonu CMR to stan oczekiwany, nie błąd (patrz SaveWarning
       // w shared/types/dokument.ts) — nawet gdy wykryty dopiero przy ponowieniu, nie powinien

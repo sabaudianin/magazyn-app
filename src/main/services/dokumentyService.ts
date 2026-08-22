@@ -11,11 +11,26 @@ import { appendPozycjeToExcel } from './excel/magazynExcelService'
 import type {
   CreateDokumentResult,
   Dokument,
+  DokumentListItem,
   DokumentTyp,
+  DokumentyListFilters,
   NewDokumentInput,
   SaveWarning
 } from '@shared/types/dokument'
 import type { Kontrahent } from '@shared/types/kontrahent'
+
+interface DokumentListRow {
+  id: number
+  typ: DokumentTyp
+  numer: string
+  data: string
+  nadawca_nazwa: string
+  odbiorca_nazwa: string
+  pdf_karta_path: string | null
+  pdf_cmr_path: string | null
+  excel_zapisano: number
+  utworzono: string
+}
 
 interface DokumentRow {
   id: number
@@ -180,6 +195,67 @@ export function createDokument(input: NewDokumentInput): Dokument {
 
 export function getDokument(id: number): Dokument {
   return assembleDokument(id)
+}
+
+// LIKE traktuje % i _ jako wieloznaczniki nawet w treści wpisanej przez użytkownika — bez
+// escapowania szukanie dosłownego "50%" albo nazwy z podkreślnikiem dopasowuje przypadkowe wiersze.
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`)
+}
+
+// Filtry są dowolną kombinacją (typ/zakres dat/szukaj), więc w odróżnieniu od reszty tego serwisu
+// nie cache'ujemy jednego stałego prepared statement — WHERE budujemy per wywołanie, tak samo jak
+// listKontrahenci w kontrahenciService.ts.
+export function listDokumenty(filters: DokumentyListFilters = {}): DokumentListItem[] {
+  const db = getDb()
+  const conditions: string[] = []
+  const params: Record<string, unknown> = {}
+
+  if (filters.typ) {
+    conditions.push('d.typ = @typ')
+    params.typ = filters.typ
+  }
+  if (filters.dataOd) {
+    conditions.push('d.data_dokumentu >= @dataOd')
+    params.dataOd = filters.dataOd
+  }
+  if (filters.dataDo) {
+    conditions.push('d.data_dokumentu <= @dataDo')
+    params.dataDo = filters.dataDo
+  }
+  if (filters.search) {
+    conditions.push(
+      "(d.numer LIKE @search ESCAPE '\\' OR n.nazwa LIKE @search ESCAPE '\\' OR o.nazwa LIKE @search ESCAPE '\\')"
+    )
+    params.search = `%${escapeLikePattern(filters.search)}%`
+  }
+
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+  const rows = db
+    .prepare<Record<string, unknown>, DokumentListRow>(
+      `SELECT d.id, d.typ, d.numer, d.data_dokumentu as data,
+              n.nazwa as nadawca_nazwa, o.nazwa as odbiorca_nazwa,
+              d.pdf_karta_path, d.pdf_cmr_path, d.excel_zapisano, d.utworzono
+       FROM Dokumenty d
+       JOIN Kontrahenci n ON n.id = d.nadawca_id
+       JOIN Kontrahenci o ON o.id = d.odbiorca_id
+       ${where}
+       ORDER BY d.id DESC`
+    )
+    .all(params)
+
+  return rows.map((row) => ({
+    id: row.id,
+    typ: row.typ,
+    numer: row.numer,
+    data: row.data,
+    nadawcaNazwa: row.nadawca_nazwa,
+    odbiorcaNazwa: row.odbiorca_nazwa,
+    pdfKartaPath: row.pdf_karta_path,
+    pdfCmrPath: row.pdf_cmr_path,
+    excelZapisano: Boolean(row.excel_zapisano),
+    utworzono: row.utworzono
+  }))
 }
 
 function generateKartaBytes(dokument: Dokument): Promise<Buffer> {

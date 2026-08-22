@@ -51,3 +51,26 @@ export interface CreateDokumentResult {
   dokument: Dokument
   warnings: SaveWarning[]
 }
+
+// Widok listy (Historia) potrzebuje tylko nazw nadawcy/odbiorcy i statusu efektów ubocznych, nie
+// pełnych obiektów Kontrahent ani pozycji — osobny, lżejszy kształt unika N+1 zapytań o pozycje
+// dla każdego wiersza tabeli.
+export interface DokumentListItem {
+  id: number
+  typ: DokumentTyp
+  numer: string
+  data: string
+  nadawcaNazwa: string
+  odbiorcaNazwa: string
+  pdfKartaPath: string | null
+  pdfCmrPath: string | null
+  excelZapisano: boolean
+  utworzono: string
+}
+
+export interface DokumentyListFilters {
+  typ?: DokumentTyp
+  dataOd?: string
+  dataDo?: string
+  search?: string
+}

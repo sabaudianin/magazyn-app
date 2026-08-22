@@ -13,6 +13,12 @@ export const IPC_CHANNELS = {
     create: 'dokumenty:create',
     retryPdfKarta: 'dokumenty:retryPdfKarta',
     retryPdfCmr: 'dokumenty:retryPdfCmr',
-    retryExcel: 'dokumenty:retryExcel'
+    retryExcel: 'dokumenty:retryExcel',
+    list: 'dokumenty:list',
+    getById: 'dokumenty:getById'
+  },
+  pdf: {
+    open: 'pdf:open',
+    saveAs: 'pdf:saveAs'
   }
 } as const
