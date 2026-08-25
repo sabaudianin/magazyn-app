@@ -1,6 +1,6 @@
 export const IPC_CHANNELS = {
   app: {
-    ping: 'app:ping'
+    getVersion: 'app:getVersion'
   },
   kontrahenci: {
     list: 'kontrahenci:list',

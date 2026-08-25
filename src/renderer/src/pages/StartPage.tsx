@@ -1,33 +1,60 @@
-import { useEffect, useState } from 'react'
-import type { PingResponse } from '@shared/types/ipc'
+import { Link } from 'react-router-dom'
+import { useKontrahenci } from '../hooks/useKontrahenci'
+import { useDokumenty } from '../hooks/useDokumenty'
 
 function StartPage(): React.JSX.Element {
-  const [ping, setPing] = useState<PingResponse | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const { kontrahenci, loading: loadingKontrahenci, error: kontrahenciError } = useKontrahenci()
+  const { dokumenty, loading: loadingDokumenty, error: dokumentyError } = useDokumenty()
 
-  useEffect(() => {
-    window.api.app
-      .ping()
-      .then(setPing)
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
-  }, [])
+  const loading = loadingKontrahenci || loadingDokumenty
+  const error = kontrahenciError ?? dokumentyError
+  const dokumentyPZ = dokumenty.filter((d) => d.typ === 'PZ').length
+  const dokumentyWZ = dokumenty.filter((d) => d.typ === 'WZ').length
 
   return (
     <div>
       <h2 className="text-xl font-semibold">Magazyn</h2>
       <p className="mt-2 text-sm text-slate-500">
-        Aplikacja do obsługi przyjęć i wydań z magazynu.
+        Obsługa przyjęć (PZ) i wydań (WZ) z magazynu — dokumenty, karty PDF, CMR i wpisy do Excela w
+        jednym miejscu.
       </p>
-      <div className="mt-4 rounded border border-slate-200 bg-white p-4 text-sm">
-        {error ? (
-          <span className="text-red-600">Błąd IPC: {error}</span>
-        ) : ping ? (
-          <span className="text-green-700">
-            IPC OK: {ping.message} ({ping.timestamp})
-          </span>
-        ) : (
-          <span className="text-slate-400">Sprawdzanie połączenia IPC…</span>
-        )}
+
+      {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+
+      <div className="mt-6 grid grid-cols-3 gap-4">
+        <div className="rounded border border-slate-200 bg-white p-4">
+          <div className="text-2xl font-semibold">{loading ? '—' : kontrahenci.length}</div>
+          <div className="text-sm text-slate-500">Aktywnych kontrahentów</div>
+        </div>
+        <div className="rounded border border-slate-200 bg-white p-4">
+          <div className="text-2xl font-semibold">{loading ? '—' : dokumentyPZ}</div>
+          <div className="text-sm text-slate-500">Dokumentów PZ</div>
+        </div>
+        <div className="rounded border border-slate-200 bg-white p-4">
+          <div className="text-2xl font-semibold">{loading ? '—' : dokumentyWZ}</div>
+          <div className="text-sm text-slate-500">Dokumentów WZ</div>
+        </div>
+      </div>
+
+      <div className="mt-6 flex gap-3">
+        <Link
+          to="/nowy-dokument"
+          className="rounded bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800"
+        >
+          + Nowy dokument
+        </Link>
+        <Link
+          to="/kontrahenci"
+          className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+        >
+          Kontrahenci
+        </Link>
+        <Link
+          to="/historia"
+          className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+        >
+          Historia dokumentów
+        </Link>
       </div>
     </div>
   )
