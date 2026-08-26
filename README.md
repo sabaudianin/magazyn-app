@@ -1,6 +1,8 @@
-# magazyn-appv2
+# Magazyn
 
-An Electron application with React and TypeScript
+Aplikacja magazynowa (Electron + React + TypeScript) do obsługi przyjęć (PZ) i
+wydań (WZ): generuje karty PDF i dokumenty CMR oraz dopisuje pozycje do
+`magazyn.xlsx`. Zobacz `CLAUDE.md` po pełny opis architektury.
 
 ## Recommended IDE Setup
 
@@ -22,13 +24,13 @@ $ npm run dev
 
 ### Build
 
+Ten projekt targetuje wyłącznie Windows.
+
 ```bash
-# For windows
+# Instalator NSIS + wersja portable (wymaga Wine poza Windows)
 $ npm run build:win
 
-# For macOS
-$ npm run build:mac
-
-# For Linux
-$ npm run build:linux
+# Zbudowany, niespakowany katalog (dist/win-unpacked) — bez instalatora,
+# działa też bez Wine na Linuksie/WSL2
+$ npm run build:unpack
 ```

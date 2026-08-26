@@ -26,6 +26,8 @@ npm run lint        # eslint --cache . (add --fix to auto-fix)
 npm run format      # prettier --write .
 npm run build       # typecheck, then electron-vite build (out/main, out/preload, out/renderer)
 npm run build:win   # build + electron-builder --win (target platform for this project)
+npm run build:unpack # build + electron-builder --win --dir (unpacked, no installer —
+                      # works without Wine, good for checking packaging config)
 ```
 
 There is no test suite yet.
@@ -43,6 +45,19 @@ There is no test suite yet.
 - **Dev vs prod DB files are separate** (`magazyn-dev.db` vs `magazyn.db`, both in
   Electron's `userData` path) specifically so `npm run dev` never touches
   packaged-app data — see `src/main/utils/paths.ts`.
+- **better-sqlite3 ships N-API prebuilds for every platform** (`node_modules/better-sqlite3/prebuilds/*.node`,
+  selected at runtime by `process.platform`/`process.arch` — see `lib/binding.js`), so the
+  Windows binary doesn't need a Windows-ABI rebuild; `npm install`'s `electron-builder
+  install-app-deps` postinstall is mostly redundant for this specific package but harmless
+  to keep (covers any future native dep that isn't N-API-prebuilt).
+- **`npm run build:win` cannot finish on this Linux/WSL2 box without Wine.** `electron-builder
+  --win --dir` (the `build:unpack` script) works fully and is enough to verify config —
+  correct `extraResources` placement, `asarUnpack` for the native module, icon, executable
+  name. Actual NSIS installer generation shells out to `wine` for a resource-signing step and
+  fails with `wine process failed ENOENT` if it's not installed. Build the real installer from
+  a native Windows shell (this WSL2 box's Windows host works — no cross-compilation needed) or
+  install Wine here; either way, verify the resulting `.exe` on a real Windows machine before
+  distributing — don't assume a Linux-produced build works untested.
 
 ## Architecture
 
@@ -119,12 +134,12 @@ top-level `setState` calls in the effect body — the stricter
 `react-hooks/set-state-in-effect` lint rule flags that), and a `cancelled` flag
 guard against stale responses on unmount/re-run.
 
-### Not implemented yet
+### Status
 
-`resources/fonts/` and `resources/templates/` exist as empty placeholders for
-upcoming work: PDF generation needs a bundled Polish-diacritic-capable font
-(pdf-lib's standard fonts don't cover ą/ć/ę/ł/ń/ó/ś/ź/ż — a custom font must be
-embedded via `@pdf-lib/fontkit`), and CMR document generation needs a template PDF
-that hasn't been supplied yet. `electron-builder.yml` still has the scaffolded
-mac/linux config; this project targets Windows only, to be trimmed when the
-packaging task is done.
+All 13 planned tasks are implemented (see `git log --oneline` for the
+`Zadanie N: ...` commits). The one thing not yet verified: the packaged `.exe`
+(NSIS installer or the `--dir` unpacked build) has not been run on a real Windows
+machine — only `electron-builder --win --dir` on this Linux/WSL2 dev box, which
+confirms the build *config* is correct (resource placement, native module, icon)
+but not that the app actually launches and works on Windows. Do that before
+distributing — see the Wine/cross-compilation gotcha above.
