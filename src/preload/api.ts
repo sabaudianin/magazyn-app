@@ -14,6 +14,7 @@ import type {
   NewDokumentInput
 } from '@shared/types/dokument'
 import type { PdfKind, SaveAsResult } from '@shared/types/pdf'
+import type { StanMagazynowyItem } from '@shared/types/stanMagazynowy'
 
 export const api = {
   app: {
@@ -50,6 +51,9 @@ export const api = {
       ipcRenderer.invoke(IPC_CHANNELS.pdf.open, dokumentId, kind),
     saveAs: (dokumentId: number, kind: PdfKind): Promise<SaveAsResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.pdf.saveAs, dokumentId, kind)
+  },
+  stanMagazynowy: {
+    list: (): Promise<StanMagazynowyItem[]> => ipcRenderer.invoke(IPC_CHANNELS.stanMagazynowy.list)
   }
 }
 

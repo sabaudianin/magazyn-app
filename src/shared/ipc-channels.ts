@@ -20,5 +20,8 @@ export const IPC_CHANNELS = {
   pdf: {
     open: 'pdf:open',
     saveAs: 'pdf:saveAs'
+  },
+  stanMagazynowy: {
+    list: 'stanMagazynowy:list'
   }
 } as const

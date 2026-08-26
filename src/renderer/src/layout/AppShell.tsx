@@ -5,7 +5,8 @@ const navItems = [
   { to: '/', label: 'Start', shortcut: '1' },
   { to: '/kontrahenci', label: 'Kontrahenci', shortcut: '2' },
   { to: '/nowy-dokument', label: 'Nowy dokument', shortcut: '3' },
-  { to: '/historia', label: 'Historia', shortcut: '4' }
+  { to: '/historia', label: 'Historia', shortcut: '4' },
+  { to: '/stan-magazynu', label: 'Stan magazynu', shortcut: '5' }
 ]
 
 function AppShell(): React.JSX.Element {
