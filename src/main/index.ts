@@ -41,9 +41,13 @@ function createWindow(): void {
 // Pod WSL2 (środowisko deweloperskie tego projektu) proces GPU Chromium regularnie nie startuje
 // poprawnie i się zapętla w crashach — WSLg przechwytuje każdy z nich jako pełny zrzut pamięci do
 // %TEMP%\wsl-crashes, który potrafi urosnąć do dziesiątek/setek GB i zapchać dysk C:. Appka nie
-// potrzebuje akceleracji GPU (formularze/tabele), więc wyłączamy ją w dev na Linuksie — cel
-// produkcyjny (Windows) tego nie dotyczy. Musi być wywołane przed app.whenReady().
-if (!app.isPackaged && process.platform === 'linux') {
+// potrzebuje akceleracji GPU (formularze/tabele), więc wyłączamy ją na Linuksie — cel produkcyjny
+// (Windows) tego nie dotyczy. Samo `!app.isPackaged` NIE WYSTARCZY: uruchomienie przez
+// `electron out/main/index.js` (np. testy e2e, `electron-builder --dir`) sprawia, że Electron
+// zgłasza isPackaged=true mimo że to wciąż ten sam dev-owy Linux — sam platform === 'linux'
+// jest jedynym warunkiem, który naprawdę obejmuje każdy sposób odpalenia appki na tej maszynie.
+// Musi być wywołane przed app.whenReady().
+if (process.platform === 'linux') {
   app.disableHardwareAcceleration()
   app.commandLine.appendSwitch('disable-gpu')
   app.commandLine.appendSwitch('disable-software-rasterizer')
