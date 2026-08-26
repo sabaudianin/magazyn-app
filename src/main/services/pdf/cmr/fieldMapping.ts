@@ -18,13 +18,21 @@ export type CmrFieldKey =
   | 'wystawiono' // pole 21
   | 'numerCmr' // "CMR No" w nagłówku
 
+// Pola 1-5/21 mają w szablonie 3-wierszową, wielojęzyczną etykietę (PL/DE/EN) nad miejscem na
+// dane — pierwotne y (proste odczyty z warstwy tekstowej) mierzyły góra tej etykiety, więc nasz
+// tekst nachodził na jej ostatnią (angielską) linijkę. y przesunięte w dół dokładnie o tyle, ile
+// trzeba, żeby zejść poniżej tej linijki z niewielkim marginesem (~4-6pt, policzone z bbox
+// poszczególnych "trzecich linii" w resources/templates/cmr-template.pdf) — nie o cały wiersz
+// (14pt), bo to bez potrzeby zjadałoby miejsce pod polem (długie, zawijane nazwy kontrahentów
+// zaczęłyby nachodzić na etykietę KOLEJNEGO pola). numerCmr nie ma takiej etykiety (sąsiaduje z
+// logo "CMR", nie z 3-wierszowym blokiem) i zostaje bez zmian.
 export const cmrFieldMappings: Record<CmrFieldKey, CmrFieldMapping> = {
-  nadawca: { position: { x: 63, y: 763, fontSize: 9, maxWidth: 220 } },
-  odbiorca: { position: { x: 63, y: 697, fontSize: 9, maxWidth: 220 } },
-  miejscePrzeznaczenia: { position: { x: 63, y: 632, fontSize: 9, maxWidth: 220 } },
-  miejsceZaladunku: { position: { x: 63, y: 590, fontSize: 9, maxWidth: 220 } },
-  zalaczoneDokumenty: { position: { x: 63, y: 549, fontSize: 9, maxWidth: 220 } },
-  wystawiono: { position: { x: 63, y: 165, fontSize: 9, maxWidth: 220 } },
+  nadawca: { position: { x: 63, y: 755, fontSize: 9, maxWidth: 220 } },
+  odbiorca: { position: { x: 63, y: 689, fontSize: 9, maxWidth: 220 } },
+  miejscePrzeznaczenia: { position: { x: 63, y: 624, fontSize: 9, maxWidth: 220 } },
+  miejsceZaladunku: { position: { x: 63, y: 582, fontSize: 9, maxWidth: 220 } },
+  zalaczoneDokumenty: { position: { x: 63, y: 541, fontSize: 9, maxWidth: 220 } },
+  wystawiono: { position: { x: 63, y: 157, fontSize: 9, maxWidth: 220 } },
   numerCmr: { position: { x: 430, y: 763, fontSize: 11 } }
 }
 
@@ -32,7 +40,7 @@ export const cmrFieldMappings: Record<CmrFieldKey, CmrFieldMapping> = {
 // na współrzędne PDF od dołu strony). opis/ilosc/jednostka/waga to jedyne kolumny, dla których
 // mamy dane w Dokument — Cechy i numery (6), Numer statystyczny (10) i Objętość (12) zostają puste.
 export const CMR_TABLE = {
-  headerY: 511,
+  headerY: 503,
   rowHeight: 14,
   fontSize: 8,
   columns: {
