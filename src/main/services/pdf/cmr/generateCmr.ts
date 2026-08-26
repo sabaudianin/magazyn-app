@@ -44,6 +44,7 @@ function buildFieldValues(dokument: Dokument): Partial<Record<CmrFieldKey, strin
   if (miejsceZaladunku) values.miejsceZaladunku = miejsceZaladunku
 
   if (dokument.dokumentyTowarzyszace) values.zalaczoneDokumenty = dokument.dokumentyTowarzyszace
+  if (dokument.numerRejestracyjny) values.numerRejestracyjny = dokument.numerRejestracyjny
 
   const wystawiono = [dokument.nadawca.miejscowosc, `dnia ${dokument.data}`]
     .filter(Boolean)
@@ -55,8 +56,10 @@ function buildFieldValues(dokument: Dokument): Partial<Record<CmrFieldKey, strin
 
 // Szablon (resources/templates/cmr-template.pdf) to płaski druk bez pól AcroForm — 4 identyczne
 // strony (kopie dla nadawcy/odbiorcy/przewoźnika/nadawcy), te same dane wpisujemy na każdej.
-// Pole 16 (Przewoźnik) zostaje puste — model danych aplikacji nie ma pojęcia przewoźnika jako
-// osobnego kontrahenta, więc to pole i pola podpisów wypełnia się ręcznie po wydruku.
+// Pole 16 (Przewoźnik) zostaje puste poza podpolem "NR REJ." (numer rejestracyjny pojazdu,
+// jedyne, co ten przepływ zbiera) — model danych aplikacji nie ma pojęcia przewoźnika jako
+// osobnego kontrahenta, więc nazwa/adres przewoźnika i pola podpisów wypełnia się ręcznie po
+// wydruku.
 export async function generateCmr(dokument: Dokument): Promise<Buffer> {
   const templatePath = getResourcePath('templates/cmr-template.pdf')
   if (!fs.existsSync(templatePath)) {

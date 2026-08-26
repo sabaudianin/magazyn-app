@@ -26,6 +26,7 @@ interface DokumentListRow {
   data: string
   nadawca_nazwa: string
   odbiorca_nazwa: string
+  numer_rejestracyjny: string | null
   pdf_karta_path: string | null
   pdf_cmr_path: string | null
   excel_zapisano: number
@@ -40,6 +41,7 @@ interface DokumentRow {
   nadawca_id: number
   odbiorca_id: number
   dokumenty_towarzyszace: string | null
+  numer_rejestracyjny: string | null
   pdf_karta_path: string | null
   pdf_cmr_path: string | null
   excel_zapisano: number
@@ -81,8 +83,8 @@ function stmts(): Statements {
          RETURNING wartosc`
       ),
       insertDokument: db.prepare(
-        `INSERT INTO Dokumenty (typ, numer, data_dokumentu, nadawca_id, odbiorca_id, dokumenty_towarzyszace)
-         VALUES (@typ, @numer, @data, @nadawcaId, @odbiorcaId, @dokumentyTowarzyszace)`
+        `INSERT INTO Dokumenty (typ, numer, data_dokumentu, nadawca_id, odbiorca_id, dokumenty_towarzyszace, numer_rejestracyjny)
+         VALUES (@typ, @numer, @data, @nadawcaId, @odbiorcaId, @dokumentyTowarzyszace, @numerRejestracyjny)`
       ),
       insertPozycja: db.prepare(
         `INSERT INTO PozycjeDokumentu (dokument_id, lp, opis, ilosc, jednostka, waga)
@@ -122,6 +124,7 @@ function assembleDokument(
     nadawca,
     odbiorca,
     dokumentyTowarzyszace: row.dokumenty_towarzyszace,
+    numerRejestracyjny: row.numer_rejestracyjny,
     pozycje: pozycjeRows.map((p) => ({
       id: p.id,
       lp: p.lp,
@@ -171,7 +174,8 @@ export function createDokument(input: NewDokumentInput): Dokument {
       data: input.data,
       nadawcaId: input.nadawcaId,
       odbiorcaId: input.odbiorcaId,
-      dokumentyTowarzyszace: input.dokumentyTowarzyszace
+      dokumentyTowarzyszace: input.dokumentyTowarzyszace,
+      numerRejestracyjny: input.numerRejestracyjny
     })
 
     const dokumentId = Number(insertResult.lastInsertRowid)
@@ -234,7 +238,7 @@ export function listDokumenty(filters: DokumentyListFilters = {}): DokumentListI
   const rows = db
     .prepare<Record<string, unknown>, DokumentListRow>(
       `SELECT d.id, d.typ, d.numer, d.data_dokumentu as data,
-              n.nazwa as nadawca_nazwa, o.nazwa as odbiorca_nazwa,
+              n.nazwa as nadawca_nazwa, o.nazwa as odbiorca_nazwa, d.numer_rejestracyjny,
               d.pdf_karta_path, d.pdf_cmr_path, d.excel_zapisano, d.utworzono
        FROM Dokumenty d
        JOIN Kontrahenci n ON n.id = d.nadawca_id
@@ -251,6 +255,7 @@ export function listDokumenty(filters: DokumentyListFilters = {}): DokumentListI
     data: row.data,
     nadawcaNazwa: row.nadawca_nazwa,
     odbiorcaNazwa: row.odbiorca_nazwa,
+    numerRejestracyjny: row.numer_rejestracyjny,
     pdfKartaPath: row.pdf_karta_path,
     pdfCmrPath: row.pdf_cmr_path,
     excelZapisano: Boolean(row.excel_zapisano),
@@ -284,6 +289,10 @@ async function generateAndSaveCmrPdf(dokument: Dokument): Promise<void> {
 // całość — rzuca i nic dalej się nie wykonuje. Kroki 2-4 (karta PDF, Excel, CMR) są non-fatal:
 // błąd każdego z nich trafia do `warnings`, ale rekord w DB nigdy nie jest z tego powodu cofany.
 // Brak skonfigurowanego szablonu CMR to stan oczekiwany (severity 'info'), nie błąd.
+// CMR generuje się TYLKO gdy podano numerRejestracyjny — czyli tylko przez przepływ "Wydaj"
+// (WydajPage), nigdy przy zwykłym tworzeniu dokumentu w "Nowy dokument" (PZ czy WZ): CMR
+// przydaje się dopiero przy wydaniu towaru, nie przy przyjęciu, i wymaga numeru auta, którego
+// zwykły formularz nie zbiera.
 export async function createDokumentZDokumentami(
   input: NewDokumentInput
 ): Promise<CreateDokumentResult> {
@@ -305,14 +314,16 @@ export async function createDokumentZDokumentami(
     warnings.push({ step: 'excel', severity: 'error', message: toErrorPayload(error).message })
   }
 
-  try {
-    await generateAndSaveCmrPdf(dokument)
-  } catch (error) {
-    if (error instanceof CmrTemplateNotConfiguredError) {
-      warnings.push({ step: 'pdfCmr', severity: 'info', message: error.message })
-    } else {
-      logger.error(`[dokumenty] CMR nie powiódł się dla ${dokument.numer}`, error)
-      warnings.push({ step: 'pdfCmr', severity: 'error', message: toErrorPayload(error).message })
+  if (dokument.numerRejestracyjny) {
+    try {
+      await generateAndSaveCmrPdf(dokument)
+    } catch (error) {
+      if (error instanceof CmrTemplateNotConfiguredError) {
+        warnings.push({ step: 'pdfCmr', severity: 'info', message: error.message })
+      } else {
+        logger.error(`[dokumenty] CMR nie powiódł się dla ${dokument.numer}`, error)
+        warnings.push({ step: 'pdfCmr', severity: 'error', message: toErrorPayload(error).message })
+      }
     }
   }
 
@@ -331,6 +342,16 @@ export async function retryPdfKarta(id: number): Promise<Dokument> {
 
 export async function retryPdfCmr(id: number): Promise<Dokument> {
   const dokument = getDokument(id)
+  // CMR ma sens tylko dla wydań z numerem auta (przepływ "Wydaj") — bez tej blokady retry
+  // wygenerowałby CMR z pustym polem NR REJ. dla dowolnego dokumentu (np. PZ albo WZ zrobione
+  // przez zwykły "Nowy dokument", które nigdy nie zbierają numeru auta), łamiąc założenie
+  // opisane przy createDokumentZDokumentami.
+  if (!dokument.numerRejestracyjny) {
+    throw new AppError(
+      'CMR_NOT_APPLICABLE',
+      'CMR dotyczy tylko wydań z numerem auta (przepływ "Wydaj") — ten dokument go nie ma'
+    )
+  }
   await generateAndSaveCmrPdf(dokument)
   return dokument
 }

@@ -15,6 +15,10 @@ export interface NewDokumentInput {
   nadawcaId: number
   odbiorcaId: number
   dokumentyTowarzyszace: string | null
+  // Numer rejestracyjny pojazdu — potrzebny tylko do CMR (pole "NR REJ."), który generuje się
+  // wyłącznie gdy ta wartość jest podana (patrz createDokumentZDokumentami). Dokumenty tworzone
+  // przez zwykły formularz "Nowy dokument" zawsze wysyłają tu null.
+  numerRejestracyjny: string | null
   pozycje: NewPozycjaInput[]
 }
 
@@ -31,6 +35,7 @@ export interface Dokument {
   nadawca: Kontrahent
   odbiorca: Kontrahent
   dokumentyTowarzyszace: string | null
+  numerRejestracyjny: string | null
   pozycje: Pozycja[]
   pdfKartaPath: string | null
   pdfCmrPath: string | null
@@ -62,6 +67,7 @@ export interface DokumentListItem {
   data: string
   nadawcaNazwa: string
   odbiorcaNazwa: string
+  numerRejestracyjny: string | null
   pdfKartaPath: string | null
   pdfCmrPath: string | null
   excelZapisano: boolean

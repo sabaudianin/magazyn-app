@@ -17,6 +17,7 @@ export type CmrFieldKey =
   | 'zalaczoneDokumenty' // pole 5
   | 'wystawiono' // pole 21
   | 'numerCmr' // "CMR No" w nagłówku
+  | 'numerRejestracyjny' // "NR REJ.:" w polu 16 (Przewoźnik)
 
 // Pola 1-5/21 mają w szablonie 3-wierszową, wielojęzyczną etykietę (PL/DE/EN) nad miejscem na
 // dane — pierwotne y (proste odczyty z warstwy tekstowej) mierzyły góra tej etykiety, więc nasz
@@ -33,7 +34,10 @@ export const cmrFieldMappings: Record<CmrFieldKey, CmrFieldMapping> = {
   miejsceZaladunku: { position: { x: 63, y: 582, fontSize: 9, maxWidth: 220 } },
   zalaczoneDokumenty: { position: { x: 63, y: 541, fontSize: 9, maxWidth: 220 } },
   wystawiono: { position: { x: 63, y: 157, fontSize: 9, maxWidth: 220 } },
-  numerCmr: { position: { x: 430, y: 763, fontSize: 11 } }
+  numerCmr: { position: { x: 430, y: 763, fontSize: 11 } },
+  // "NR REJ.:" to gotowy napis w szablonie (nie 3-wierszowa etykieta) — wpisujemy inline zaraz
+  // po nim, tak jak numerCmr obok logo "CMR", nie pod spodem.
+  numerRejestracyjny: { position: { x: 345, y: 668, fontSize: 9, maxWidth: 140 } }
 }
 
 // Kolumny tabeli towarów (pola 6-12), y = górna krawędź nagłówka kolumn (top-origin przeliczony

@@ -5,6 +5,7 @@ import KontrahenciPage from './pages/KontrahenciPage'
 import NowyDokumentPage from './pages/NowyDokumentPage'
 import HistoriaPage from './pages/HistoriaPage'
 import StanMagazynuPage from './pages/StanMagazynuPage'
+import WydajPage from './pages/WydajPage'
 
 function App(): React.JSX.Element {
   return (
@@ -16,6 +17,7 @@ function App(): React.JSX.Element {
           <Route path="/nowy-dokument" element={<NowyDokumentPage />} />
           <Route path="/historia" element={<HistoriaPage />} />
           <Route path="/stan-magazynu" element={<StanMagazynuPage />} />
+          <Route path="/wydaj" element={<WydajPage />} />
         </Route>
       </Routes>
     </HashRouter>

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useStanMagazynowy } from '../hooks/useStanMagazynowy'
 
 // ilosc to REAL w SQLite (ułamkowe jednostki jak kg) — SUM po kilku dokumentach potrafi dać błąd
@@ -39,14 +40,16 @@ function StanMagazynuPage(): React.JSX.Element {
                 {formatIlosc(p.stan)}
               </td>
               <td className="py-2 text-right">
-                <button
-                  type="button"
-                  disabled
-                  title="Funkcjonalność w przygotowaniu — wkrótce"
-                  className="rounded bg-white px-2 py-1 text-xs font-medium text-slate-400 ring-1 ring-slate-200 disabled:cursor-not-allowed"
+                <Link
+                  to={`/wydaj?${new URLSearchParams({
+                    opis: p.opis,
+                    jednostka: p.jednostka,
+                    stan: formatIlosc(p.stan)
+                  }).toString()}`}
+                  className="rounded bg-white px-2 py-1 text-xs font-medium text-amber-800 ring-1 ring-amber-300 hover:bg-amber-100"
                 >
                   Wydaj
-                </button>
+                </Link>
               </td>
             </tr>
           ))}

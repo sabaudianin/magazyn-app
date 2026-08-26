@@ -1,13 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
+import { Link, useSearchParams } from 'react-router-dom'
 import KontrahentPicker from '../components/kontrahenci/KontrahentPicker'
-import PozycjeTable from '../components/dokumenty/PozycjeTable'
-import { DokumentFormSchema } from '../components/dokumenty/dokumentFormSchema'
-import type {
-  DokumentFormOutput,
-  DokumentFormValues
-} from '../components/dokumenty/dokumentFormSchema'
+import { WydajFormSchema } from '../components/dokumenty/wydajFormSchema'
+import type { WydajFormOutput, WydajFormValues } from '../components/dokumenty/wydajFormSchema'
 import type { Kontrahent } from '@shared/types/kontrahent'
 import type { Dokument, SaveWarning } from '@shared/types/dokument'
 import { parseIpcError } from '@shared/utils/ipcError'
@@ -19,11 +16,13 @@ function todayIso(): string {
   return `${d.getFullYear()}-${mm}-${dd}`
 }
 
-function emptyPozycja(): DokumentFormValues['pozycje'][number] {
-  return { opis: '', ilosc: 1, jednostka: 'szt', waga: null }
-}
+function WydajPage(): React.JSX.Element {
+  const [searchParams] = useSearchParams()
+  const opis = searchParams.get('opis') ?? ''
+  const jednostka = searchParams.get('jednostka') ?? ''
+  const stan = searchParams.get('stan')
+  const stanNumber = stan !== null ? Number(stan) : null
 
-function NowyDokumentPage(): React.JSX.Element {
   const [nadawca, setNadawca] = useState<Kontrahent | null>(null)
   const [odbiorca, setOdbiorca] = useState<Kontrahent | null>(null)
   const [kontrahenciBlad, setKontrahenciBlad] = useState<{
@@ -35,11 +34,8 @@ function NowyDokumentPage(): React.JSX.Element {
   const [warnings, setWarnings] = useState<SaveWarning[]>([])
   const [retryingStep, setRetryingStep] = useState<SaveWarning['step'] | null>(null)
   const retryLockRef = useRef(false)
-  // Id dokumentu aktualnie wyświetlanego w bannerze sukcesu — jeśli w trakcie retry użytkownik
-  // zdąży zapisać KOLEJNY dokument (nowy onSubmit), wynik starego retry nie może nadpisać nowo
-  // wyświetlonego dokumentu. Synchronizowane efektem (nie ustawiane wprost w onSubmit) — refy
-  // czyta/pisze się poza renderem, a react-hooks/refs nie pozwala przekazać do handleSubmit()
-  // funkcji, która sama dotyka refa.
+  // Patrz analogiczny komentarz w NowyDokumentPage.tsx — chroni przed nadpisaniem stanu przez
+  // wynik retry dotyczącego już nieaktualnego (poprzednio zapisanego) dokumentu.
   const currentDokIdRef = useRef<number | null>(null)
   useEffect(() => {
     currentDokIdRef.current = savedDokument?.id ?? null
@@ -47,21 +43,21 @@ function NowyDokumentPage(): React.JSX.Element {
 
   const {
     register,
-    control,
     handleSubmit,
     reset,
+    control,
     formState: { errors, isSubmitting }
-  } = useForm<DokumentFormValues, unknown, DokumentFormOutput>({
-    resolver: zodResolver(DokumentFormSchema),
+  } = useForm<WydajFormValues, unknown, WydajFormOutput>({
+    resolver: zodResolver(WydajFormSchema),
     defaultValues: {
-      typ: 'PZ',
       data: todayIso(),
-      dokumentyTowarzyszace: null,
-      pozycje: [emptyPozycja()]
+      numerRejestracyjny: '',
+      dokumentyTowarzyszace: null
     }
   })
+  const iloscWatch = useWatch({ control, name: 'ilosc' })
 
-  const onSubmit = async (values: DokumentFormOutput): Promise<void> => {
+  const onSubmit = async (values: WydajFormOutput): Promise<void> => {
     setSubmitError(null)
     setSavedDokument(null)
     setWarnings([])
@@ -74,19 +70,17 @@ function NowyDokumentPage(): React.JSX.Element {
 
     try {
       const result = await window.api.dokumenty.create({
-        ...values,
+        typ: 'WZ',
+        data: values.data,
         nadawcaId: nadawca.id,
         odbiorcaId: odbiorca.id,
-        numerRejestracyjny: null
+        dokumentyTowarzyszace: values.dokumentyTowarzyszace,
+        numerRejestracyjny: values.numerRejestracyjny,
+        pozycje: [{ opis, jednostka, ilosc: values.ilosc, waga: null }]
       })
       setSavedDokument(result.dokument)
       setWarnings(result.warnings)
-      reset({
-        typ: values.typ,
-        data: todayIso(),
-        dokumentyTowarzyszace: null,
-        pozycje: [emptyPozycja()]
-      })
+      reset({ data: todayIso(), numerRejestracyjny: '', dokumentyTowarzyszace: null })
       setNadawca(null)
       setOdbiorca(null)
       setKontrahenciBlad({})
@@ -95,12 +89,9 @@ function NowyDokumentPage(): React.JSX.Element {
     }
   }
 
-  // retryLockRef blokuje WSZYSTKIE przyciski "Ponów" (nie tylko klikany), dopóki trwa jedna próba.
-  // Ref, nie tylko stan retryingStep (który steruje samym disabled na przycisku) — retryExcel
-  // dopisuje wiersze do magazyn.xlsx bez deduplikacji, więc podwójne kliknięcie zduplikowałoby
-  // pozycje w arkuszu, a stan Reacta commituje się dopiero po re-renderze; ref blokuje natychmiast,
-  // synchronicznie, zanim do tego dojdzie. Blokada obejmuje też różne kroki naraz — dwie równoległe
-  // próby mogłyby się nadpisać nawzajem w setSavedDokument (każda ma swój snapshot sprzed retry).
+  // Patrz analogiczny komentarz w NowyDokumentPage.tsx / HistoriaPage.tsx — ref blokuje
+  // natychmiast, synchronicznie, przed podwójnym kliknięciem "Ponów" (retryExcel dopisuje
+  // wiersze do magazyn.xlsx bez deduplikacji).
   const handleRetry = async (step: SaveWarning['step']): Promise<void> => {
     if (!savedDokument || retryLockRef.current) return
     const targetId = savedDokument.id
@@ -114,17 +105,12 @@ function NowyDokumentPage(): React.JSX.Element {
     setRetryingStep(step)
     try {
       const updated = await retry(targetId)
-      // Użytkownik mógł w międzyczasie zapisać kolejny dokument — wynik tego retry dotyczy już
-      // nieaktualnego dokumentu i nie powinien nadpisać tego, co jest teraz na ekranie.
       if (currentDokIdRef.current !== targetId) return
       setSavedDokument(updated)
       setWarnings((prev) => prev.filter((w) => w.step !== step))
     } catch (err) {
       if (currentDokIdRef.current !== targetId) return
       const parsed = parseIpcError(err)
-      // Brak skonfigurowanego szablonu CMR to stan oczekiwany, nie błąd (patrz SaveWarning
-      // w shared/types/dokument.ts) — nawet gdy wykryty dopiero przy ponowieniu, nie powinien
-      // trafić do alarmującego submitError, tylko wrócić na listę jako informacyjny.
       if (parsed.code === 'CMR_TEMPLATE_NOT_CONFIGURED') {
         setWarnings((prev) =>
           prev.map((w) =>
@@ -140,13 +126,40 @@ function NowyDokumentPage(): React.JSX.Element {
     }
   }
 
+  // Miękkie ostrzeżenie, nie blokada — czasem trzeba wydać więcej niż pokazuje stan (np. gdy
+  // przyjęcie jeszcze nie zostało wpisane), ale użytkownik ma to zauważyć, zanim wyśle formularz,
+  // zamiast dowiedzieć się dopiero z ujemnego stanu w widoku "Stan magazynu".
+  const przekroczonoStan =
+    stanNumber !== null && typeof iloscWatch === 'number' && iloscWatch > stanNumber
+
+  if (!opis || !jednostka) {
+    return (
+      <div>
+        <h2 className="text-xl font-semibold">Wydaj towar</h2>
+        <p className="mt-2 text-sm text-red-600">
+          Brak informacji o pozycji do wydania.{' '}
+          <Link to="/stan-magazynu" className="underline">
+            Wróć do stanu magazynu
+          </Link>
+          .
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div>
-      <h2 className="text-xl font-semibold">Nowy dokument</h2>
+      <h2 className="text-xl font-semibold">Wydaj towar</h2>
+      <p className="mt-2 text-sm text-slate-500">
+        {opis} ({jednostka}){stan !== null && <> — dostępny stan: {stan}</>}
+      </p>
 
       {savedDokument && (
         <div className="mt-4 rounded border border-green-200 bg-green-50 p-3 text-sm text-green-800">
-          Zapisano dokument <strong>{savedDokument.numer}</strong>.
+          Zapisano dokument <strong>{savedDokument.numer}</strong>.{' '}
+          <Link to="/stan-magazynu" className="underline">
+            Wróć do stanu magazynu
+          </Link>
         </div>
       )}
       {warnings.length > 0 && (
@@ -181,54 +194,63 @@ function NowyDokumentPage(): React.JSX.Element {
         </div>
       )}
 
-      <form className="mt-4 max-w-3xl space-y-4" onSubmit={handleSubmit(onSubmit)}>
-        <div className="flex gap-4">
-          <label className="text-sm text-slate-700">
-            Typ
-            <select
-              className="mt-1 block rounded border border-slate-300 px-2 py-1 text-sm"
-              {...register('typ')}
-            >
-              <option value="PZ">PZ — przyjęcie</option>
-              <option value="WZ">WZ — wydanie</option>
-            </select>
-          </label>
-          <label className="text-sm text-slate-700">
-            Data
-            <input
-              type="date"
-              className="mt-1 block rounded border border-slate-300 px-2 py-1 text-sm"
-              {...register('data')}
-            />
-            {errors.data && <p className="mt-1 text-xs text-red-600">{errors.data.message}</p>}
-          </label>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <KontrahentPicker
-            label="Nadawca"
-            value={nadawca}
-            onChange={(k) => {
-              setNadawca(k)
-              setKontrahenciBlad((prev) => ({ ...prev, nadawca: undefined }))
-            }}
-            error={kontrahenciBlad.nadawca}
+      <form className="mt-4 max-w-md space-y-4" onSubmit={handleSubmit(onSubmit)}>
+        <label className="block text-sm text-slate-700">
+          Data
+          <input
+            type="date"
+            className="mt-1 block rounded border border-slate-300 px-2 py-1 text-sm"
+            {...register('data')}
           />
-          <KontrahentPicker
-            label="Odbiorca"
-            value={odbiorca}
-            onChange={(k) => {
-              setOdbiorca(k)
-              setKontrahenciBlad((prev) => ({ ...prev, odbiorca: undefined }))
-            }}
-            error={kontrahenciBlad.odbiorca}
-          />
-        </div>
+          {errors.data && <p className="mt-1 text-xs text-red-600">{errors.data.message}</p>}
+        </label>
 
-        <div>
-          <h3 className="text-sm font-medium text-slate-700">Pozycje</h3>
-          <PozycjeTable control={control} register={register} errors={errors} />
-        </div>
+        <KontrahentPicker
+          label="Nadawca"
+          value={nadawca}
+          onChange={(k) => {
+            setNadawca(k)
+            setKontrahenciBlad((prev) => ({ ...prev, nadawca: undefined }))
+          }}
+          error={kontrahenciBlad.nadawca}
+        />
+        <KontrahentPicker
+          label="Odbiorca"
+          value={odbiorca}
+          onChange={(k) => {
+            setOdbiorca(k)
+            setKontrahenciBlad((prev) => ({ ...prev, odbiorca: undefined }))
+          }}
+          error={kontrahenciBlad.odbiorca}
+        />
+
+        <label className="block text-sm text-slate-700">
+          Ilość do wydania
+          <input
+            type="number"
+            step="any"
+            className="mt-1 block rounded border border-slate-300 px-2 py-1 text-sm"
+            {...register('ilosc', { valueAsNumber: true })}
+          />
+          {errors.ilosc && <p className="mt-1 text-xs text-red-600">{errors.ilosc.message}</p>}
+          {!errors.ilosc && przekroczonoStan && (
+            <p className="mt-1 text-xs text-amber-700">
+              Uwaga: to więcej niż dostępny stan ({stan}).
+            </p>
+          )}
+        </label>
+
+        <label className="block text-sm text-slate-700">
+          Numer auta
+          <input
+            className="mt-1 block w-full rounded border border-slate-300 px-2 py-1 text-sm"
+            placeholder="np. WA12345"
+            {...register('numerRejestracyjny')}
+          />
+          {errors.numerRejestracyjny && (
+            <p className="mt-1 text-xs text-red-600">{errors.numerRejestracyjny.message}</p>
+          )}
+        </label>
 
         <label className="block text-sm text-slate-700">
           Dokumenty towarzyszące (notatka)
@@ -244,11 +266,11 @@ function NowyDokumentPage(): React.JSX.Element {
           disabled={isSubmitting}
           className="rounded bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800 disabled:opacity-50"
         >
-          Zapisz dokument
+          Wydaj
         </button>
       </form>
     </div>
   )
 }
 
-export default NowyDokumentPage
+export default WydajPage

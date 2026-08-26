@@ -97,8 +97,21 @@ function HistoriaPage(): React.JSX.Element {
 
   const retryDisabled = retryingKey !== null
 
-  function renderPdfCell(id: number, kind: PdfKind, path: string | null): React.JSX.Element {
+  function renderPdfCell(
+    id: number,
+    kind: PdfKind,
+    path: string | null,
+    numerRejestracyjny: string | null
+  ): React.JSX.Element {
     const step: RetryStep = kind === 'karta' ? 'pdfKarta' : 'pdfCmr'
+    // CMR generuje się tylko dla dokumentów z numerem auta (przepływ "Wydaj") — sprawdzamy samo
+    // pole, nie typ dokumentu, bo to ono jest rzeczywistym warunkiem w dokumentyService.ts
+    // (retryPdfCmr rzuca AppError bez niego). Dotyczy każdego PZ i każdego WZ zrobionego przez
+    // zwykły "Nowy dokument" (zawsze wysyła numerRejestracyjny: null) — bez tego wyjątku "Ponów"
+    // wisiałby tam wiecznie, sugerując zaległość, której w rzeczywistości nie ma.
+    if (kind === 'cmr' && !numerRejestracyjny && !path) {
+      return <span className="text-slate-400">— (wymaga numeru auta)</span>
+    }
     if (path) {
       return (
         <div className="flex gap-2">
@@ -208,8 +221,12 @@ function HistoriaPage(): React.JSX.Element {
                 <td className="py-2">{d.data}</td>
                 <td className="py-2">{d.nadawcaNazwa}</td>
                 <td className="py-2">{d.odbiorcaNazwa}</td>
-                <td className="py-2">{renderPdfCell(d.id, 'karta', d.pdfKartaPath)}</td>
-                <td className="py-2">{renderPdfCell(d.id, 'cmr', d.pdfCmrPath)}</td>
+                <td className="py-2">
+                  {renderPdfCell(d.id, 'karta', d.pdfKartaPath, d.numerRejestracyjny)}
+                </td>
+                <td className="py-2">
+                  {renderPdfCell(d.id, 'cmr', d.pdfCmrPath, d.numerRejestracyjny)}
+                </td>
                 <td className="py-2">
                   {d.excelZapisano ? (
                     <span className="text-green-700">✓ zapisano</span>

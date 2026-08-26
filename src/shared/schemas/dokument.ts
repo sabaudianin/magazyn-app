@@ -14,6 +14,7 @@ export const NewDokumentInputSchema = z.object({
   nadawcaId: IdSchema,
   odbiorcaId: IdSchema,
   dokumentyTowarzyszace: z.preprocess(emptyToNull, z.string().trim().nullable()),
+  numerRejestracyjny: z.preprocess(emptyToNull, z.string().trim().nullable()),
   pozycje: z.array(NewPozycjaInputSchema).min(1, 'Dokument musi mieć co najmniej jedną pozycję')
 })
 
